@@ -8,49 +8,147 @@ use Illuminate\Support\Facades\File;
 class MongoMigrate extends Command
 {
     /**
-     * The name and signature of the console command.
+     * The console command signature.
      *
-     * @var string
+     * action: migrate|refresh|reset
+     * collection: optional specific collection migration file
      */
-    protected $signature = 'migrate:mongo';
+    protected $signature = 'mongo:migrate
+        {action? : migrate|refresh|reset}
+        {collection? : Specific collection name}';
 
     /**
      * The console command description.
-     *
-     * @var string
      */
-    protected $description = 'Run all MongoDB migrations in database/MongoMigrations';
+    protected $description = 'Run MongoDB migrations stored inside database/MongoMigrations';
 
     /**
      * Execute the console command.
+     *
+     * This method parses the action & collection arguments,
+     * validates them, loads migration files,
+     * and delegates to the appropriate handler.
      */
     public function handle()
     {
+        $action     = $this->argument('action');
+        $collection = $this->argument('collection');
+
+        // Available valid actions
+        $validActions = ['migrate', 'refresh', 'reset'];
+
+        /**
+         * If "action" is not one of the valid actions:
+         * - Treat it as a collection name instead.
+         * - And default action becomes "migrate".
+         */
+        if (!in_array($action, $validActions)) {
+            if (!$collection) {
+                $collection = $action;
+            }
+            $action = 'migrate';
+        }
+
+        // Folder where migration files exist
         $migrationsPath = base_path('database/MongoMigrations');
 
+        // Ensure folder exists
         if (!File::exists($migrationsPath)) {
-            $this->error("MongoMigrations folder does not exist: {$migrationsPath}");
+            $this->error("✘ MongoMigrations folder missing: {$migrationsPath}");
             return;
         }
 
+        // Load all migration files
         $files = File::files($migrationsPath);
 
         if (empty($files)) {
-            $this->info("No MongoDB migration files found in {$migrationsPath}");
+            $this->warn("⚠  No MongoDB migration files found.");
             return;
         }
 
-        foreach ($files as $file) {
-            $this->info("Running migration: " . $file->getFilename());
+        // Call the appropriate method dynamically
+        $result = $this->{$action}(files: $files, collection: $collection);
 
-            // Include the file and run up() method
+        if ($result) {
+            $this->line("<bg=blue;fg=white>✔  MongoDB migration '{$action}' executed successfully. </>");
+        } else {
+            $this->error("✘ No matching migration file found for '{$collection}'.");
+        }
+    }
+
+    /**
+     * Run all migrations (equivalent to "up").
+     *
+     * @param array $files
+     * @param string|null $collection
+     */
+    private function migrate(array $files, ?string $collection): bool
+    {
+        $this->line("<fg=cyan>▶ Running MongoDB migrations...</>");
+        return $this->executeAction(files: $files, collection: $collection, action: 'up');
+    }
+
+    /**
+     * Rollback and then re-run migrations (reset → migrate).
+     *
+     * @param array $files
+     * @param string|null $collection
+     */
+    private function refresh(array $files, ?string $collection): bool
+    {
+        $this->line("<fg=yellow>↺ Refreshing MongoDB migrations...</>");
+
+        $this->reset(files: $files, collection: $collection);
+        return $this->migrate(files: $files, collection: $collection);
+    }
+
+    /**
+     * Rollback (equivalent to running "down").
+     *
+     * @param array $files
+     * @param string|null $collection
+     */
+    private function reset(array $files, ?string $collection): bool
+    {
+        $this->line("<fg=red>⤵ Rolling back MongoDB migrations...</>");
+        return $this->executeAction(files: $files, collection: $collection, action: 'down');
+    }
+
+    /**
+     * Core executor that runs up/down on matching migration files.
+     *
+     * @param array $files
+     * @param string $action ("up" or "down")
+     * @param string|null $collection
+     *
+     * @return bool Whether any migration file matched
+     */
+    private function executeAction(array $files, string $action, ?string $collection): bool
+    {
+        $found = false;
+
+        foreach ($files as $file) {
+            $fileName = $file->getFilename();
+
+            // If specific collection is given, filter file names
+            if ($collection && !str_contains($fileName, "create_{$collection}_collection")) {
+                continue;
+            }
+
+            $found = true;
+            $this->info("→ {$fileName}");
+
+            // Include the migration file and get its returned class
             $migration = include $file->getRealPath();
 
-            if (method_exists($migration, 'up')) {
-                $migration->up();
+            // Run the appropriate function
+            if (method_exists($migration, $action)) {
+                $migration->$action();
+            } else {
+                $this->warn("⚠  Method '{$action}' not found in {$fileName}");
             }
         }
 
-        $this->info("All MongoDB migrations executed successfully.");
+        return $found;
     }
 }

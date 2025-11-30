@@ -19,7 +19,7 @@ return new class
         $collectionNames = array_map(fn($c) => $c->getName(), $collections);
 
         if (!in_array($collectionName, $collectionNames)) {
-            $db->createCollection($collectionName);
+            $db->createCollection($collectionName, $this->validation());
         }
 
         // Example: create indexes (optional)
@@ -36,5 +36,65 @@ return new class
     {
         $collectionName = '{{ collection }}';
         DB::connection('mongodb')->getMongoDB()->dropCollection($collectionName);
+    }
+
+    /**
+     * // update this validation function accordingly
+     */
+    private function validation(): array
+    {
+        $result = [];
+
+        // $result = [
+        //     'validator' => [
+        //         '$jsonSchema' => [
+        //             'bsonType' => 'object',
+        //             'required' => ['name', 'email', 'role'],
+        //             'properties' => [
+        //                 'name' => ['bsonType' => 'string'],
+        //                 'email' => ['bsonType' => 'string'],
+        //                 'role' => [
+        //                     'bsonType' => 'string',
+        //                     'enum' => ['vendor', 'agency', 'agency_client', 'user', 'client', 'reseller'],
+        //                 ],
+        //             ],
+        //             'dependencies' => [
+        //                 'role' => [
+        //                     'oneOf' => [
+        //                         [
+        //                             'properties' => [
+        //                                 'role' => ['enum' => ['vendor']],
+        //                                 'agencyId' => ['bsonType' => 'null'],
+        //                                 'vendorId' => [
+        //                                     'bsonType' => ['null', 'objectId']   // allow update later
+        //                                 ]
+        //                             ]
+        //                         ],
+        //                         [
+        //                             'properties' => [
+        //                                 'role' => ['enum' => ['agency']],
+        //                                 'vendorId' => ['bsonType' => 'objectId'],
+        //                                 'agencyId' => ['bsonType' => ['null', 'objectId']]
+        //                             ],
+        //                             'required' => ['vendorId']
+        //                         ],
+        //                         [
+        //                             'properties' => [
+        //                                 'role' => ['enum' => ['agency_client', 'user', 'client', 'reseller']],
+        //                                 'agencyId' => ['bsonType' => 'objectId'],
+        //                                 'vendorId' => ['bsonType' => 'objectId']
+        //                             ],
+        //                             'required' => ['agencyId','vendorId']
+        //                         ]
+        //                     ]
+        //                 ]
+        //             ]
+        //         ]
+        //     ],
+        //     'validationLevel' => 'strict',
+        //     'validationAction' => 'error',
+        // ];
+
+        return $result;
     }
 };
