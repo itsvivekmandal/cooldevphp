@@ -1,0 +1,40 @@
+<?php
+
+use Illuminate\Support\Facades\DB;
+
+return new class
+{
+    /**
+     * Run the migrations.
+     *
+     * This creates the collection and optional indexes.
+     */
+    public function up()
+    {
+        $collectionName = '{{ collection }}';
+        $db = DB::connection('mongodb')->getMongoDB();
+
+        // Check if collection exists
+        $collections = iterator_to_array($db->listCollections());
+        $collectionNames = array_map(fn($c) => $c->getName(), $collections);
+
+        if (!in_array($collectionName, $collectionNames)) {
+            $db->createCollection($collectionName);
+        }
+
+        // Example: create indexes (optional)
+        // $db->selectCollection($collectionName)->createIndex(['email' => 1], ['unique' => true]);
+        // $db->selectCollection($collectionName)->createIndex(['username' => 1]);
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * Drops the collection.
+     */
+    public function down()
+    {
+        $collectionName = '{{ collection }}';
+        DB::connection('mongodb')->getMongoDB()->dropCollection($collectionName);
+    }
+};
